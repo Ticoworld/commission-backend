@@ -1,0 +1,160 @@
+// Prisma schema for ESLGSC backend
+// Datasource and generator
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   // SUPER | ADMIN | MEDIA | AUDIT | LGA
+  status       String   @default("active") // active | invited | disabled
+  inviteToken  String?  @unique
+  inviteTokenExpires DateTime?
+  acceptedAt   DateTime?
+  resetToken   String?  @unique
+  resetTokenExpires DateTime?
+  lgaId        String?  @db.Uuid
+  lga          LGA?     @relation(fields: [lgaId], references: [id])
+  createdAt    DateTime @default(now())
+
+  // Relations
+  News            News[]         @relation("UserNews")
+  submittedEdits  EmployeeEdit[] @relation("UserSubmittedEdits")
+}
+
+model LGA {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String
+  code      String     @unique
+  createdAt DateTime   @default(now())
+
+  users     User[]
+  employees Employee[]
+  uploads   Upload[]
+}
+
+model Employee {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  email           String   @unique
+  position        String
+  department      String
+  employmentDate  DateTime
+  retirementDate  DateTime
+  status          String
+  lgaId           String?  @db.Uuid
+  lga             LGA?     @relation(fields: [lgaId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  edits           EmployeeEdit[]
+}
+
+model News {
+  id           String    @id @default(uuid()) @db.Uuid
+  title        String
+  summary      String?
+  content      String?
+  category     String?
+  imageUrl     String?
+  status       String    // draft | pending | published | archived
+  authorId     String    @db.Uuid
+  author       User      @relation("UserNews", fields: [authorId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  publishedAt  DateTime?
+  tags         String[]
+  rejectionNotes String?
+}
+
+model Upload {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  filename  String
+  fileUrl   String
+  lgaId     String   @db.Uuid
+  lga       LGA      @relation(fields: [lgaId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model EmployeeEdit {
+  id             String    @id @default(uuid()) @db.Uuid
+  employeeId     String    @db.Uuid
+  employee       Employee  @relation(fields: [employeeId], references: [id])
+  submittedById  String    @db.Uuid
+  submittedBy    User      @relation("UserSubmittedEdits", fields: [submittedById], references: [id])
+  submittedAt    DateTime  @default(now())
+  status         String    // pending | approved | rejected
+  changes        Json
+  reason         String
+  reviewerId     String?
+  notes          String?
+  resolvedAt     DateTime?
+}
+
+model AuditQueue {
+  id               String   @id
+  entityType       String   // news | employeeEdit
+  entityId         String
+  entityName       String?
+  status           String   // pending | approved | rejected
+  submittedAt      DateTime @default(now())
+  submittedById    String?
+  submittedByName  String?
+  payload          Json?
+}
+
+model Activity {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorId      String?
+  actorName    String?
+  action       String
+  entityType   String
+  entityId     String?
+  entityName   String?
+  details      Json?
+  timestamp    DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// Role/Permission models to support /api/roles endpoints
+
+model Role {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String            @unique
+  createdAt DateTime          @default(now())
+
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String            @unique
+  createdAt DateTime          @default(now())
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
