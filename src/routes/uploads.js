@@ -5,11 +5,11 @@ const Uploads = require('../controllers/uploadsController');
 
 const router = express.Router();
 
-router.post('/', authenticate, requireRole('LGA', 'SUPER', 'ADMIN'), upload.single('file'), (req, res) => Uploads.uploadFile(req, res));
+router.post('/', authenticate, requireRole('LGA', 'SUPER_ADMIN', 'ADMIN'), upload.single('file'), (req, res) => Uploads.uploadFile(req, res));
 
 router.get('/my-lga', authenticate, requireRole('LGA'), (req, res) => Uploads.myLga(req, res));
 
-router.get('/all', authenticate, requireRole('SUPER', 'ADMIN'), (req, res) => Uploads.all(req, res));
+router.get('/all', authenticate, requireRole('SUPER_ADMIN', 'ADMIN'), (req, res) => Uploads.all(req, res));
 
 // Protected download route: streams file content and enforces authentication/authorization
 router.get('/:filename', authenticate, (req, res) => Uploads.downloadFile(req, res));

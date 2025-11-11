@@ -43,20 +43,32 @@ model LGA {
 }
 
 model Employee {
-  id              String   @id @default(uuid()) @db.Uuid
-  name            String
-  email           String   @unique
-  position        String
-  department      String
-  employmentDate  DateTime
-  retirementDate  DateTime
-  status          String
-  lgaId           String?  @db.Uuid
-  lga             LGA?     @relation(fields: [lgaId], references: [id])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                        String    @id @default(uuid()) @db.Uuid
+  full_name                 String    // Corresponds to NAME
+  sex                       String    // Corresponds to SEX
+  rank                      String    // Corresponds to RANK
+  grade_level               String    // Corresponds to GL
+  date_of_birth             DateTime  @db.Date // Corresponds to DATE OF BIRTH
+  date_of_first_appointment DateTime  @db.Date // Corresponds to DATE OF 1st APPT
+  lga_of_origin             String    // Corresponds to L.G.A OF ORIGIN
+  department                String    // Corresponds to DEPT.
+  present_station           String    // Corresponds to PRESENT STATION
+  phone_number              String?   // Corresponds to PHONE NUMBER (nullable)
+  qualifications            String?   // Corresponds to QUALIFICATIONS (nullable)
+  date_of_confirmation      DateTime? @db.Date // Corresponds to DATE OF CONFIRMATION (nullable)
+  date_of_transfer          DateTime? @db.Date // Corresponds to DATE OF CON/ADV/TRF OF SERVICE (nullable)
+  remark                    String?   // Corresponds to REMARK (nullable)
 
-  edits           EmployeeEdit[]
+  // --- Biometric/New Fields ---
+  profile_picture_url       String?
+  fingerprint_template      String?
+
+  // --- System/Relation Fields ---
+  lgaId                     String?   @db.Uuid
+  lga                       LGA?      @relation(fields: [lgaId], references: [id])
+  edits                     EmployeeEdit[]
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 }
 
 model News {

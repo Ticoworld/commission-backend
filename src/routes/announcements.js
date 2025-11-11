@@ -7,6 +7,6 @@ const router = express.Router();
 
 router.get('/', (req, res) => Announcements.list(req, res));
 
-router.post('/', authenticate, requireRole('SUPER', 'ADMIN'), (req, res) => Announcements.create(req, res));
+router.post('/', authenticate, requireRole('SUPER_ADMIN', 'ADMIN'), (req, res) => Announcements.create(req, res));
 
 module.exports = router;

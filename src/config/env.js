@@ -18,6 +18,8 @@ const env = {
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
   EMAIL_FROM: process.env.EMAIL_FROM || 'ESLGSC <noreply@eslgsc.gov.ng>',
+  // Frontend base URL for links in emails (invite/reset). Defaults to Vite dev server in development.
+  APP_BASE_URL: process.env.APP_BASE_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : undefined),
 };
 
 module.exports = env;

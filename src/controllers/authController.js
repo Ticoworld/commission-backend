@@ -22,7 +22,14 @@ const inviteSchema = z.object({ email: z.string().email(), role: z.string().min(
 
 async function invite(req, res) {
   // Only SUPER role should reach here via middleware
+  // Security: prevent ADMIN inviting elevated roles
+  const { role: invitingUserRole } = req.user || {};
   const { email, role } = inviteSchema.parse(req.body);
+  if (invitingUserRole === 'ADMIN') {
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+      return res.status(403).json({ message: 'Admins cannot invite other Admins or Super Admins.' });
+    }
+  }
 
   // Short random token and 24h expiry
   const token = crypto.randomBytes(12).toString('hex');
@@ -65,7 +72,7 @@ async function invite(req, res) {
   }
 
   // Build absolute URL for set-password
-  const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const baseUrl = env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
   // Point invite link to SPA route, not API
   const link = `${baseUrl}/set-password?token=${token}`;
 

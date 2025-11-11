@@ -3,7 +3,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const Activity = require('../controllers/activityController');
 
 const router = express.Router();
-router.use(authenticate, requireRole('SUPER', 'ADMIN'));
+router.use(authenticate, requireRole('SUPER_ADMIN', 'ADMIN'));
 
 router.get('/activity-log', (req, res) => Activity.list(req, res));
 

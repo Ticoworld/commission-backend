@@ -39,10 +39,10 @@ async function main() {
   app.use(express.json());
   app.use(rateLimit(commonLimiter));
 
-  // Static uploads
+  // Static uploads (existing upload directory)
   app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR)));
-  // Static uploads (public static path)
-  app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR)));
+  // Static public directory for profile pictures
+  app.use('/uploads/profiles', express.static(path.resolve('./public/uploads/profiles')));
 
   // Health
   app.get('/api/health', (req, res) => {

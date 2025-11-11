@@ -12,8 +12,8 @@ router.post('/login', rateLimit(authLimiter), (req, res) => AuthController.login
 // Current user
 router.get('/me', authenticate, (req, res) => AuthController.me(req, res));
 
-// Invite a user (SUPER only)
-router.post('/invite', authenticate, requireRole('SUPER'), rateLimit(authLimiter), (req, res) => AuthController.invite(req, res));
+// Invite a user (SUPER_ADMIN or ADMIN)
+router.post('/invite', authenticate, requireRole('SUPER_ADMIN', 'ADMIN'), rateLimit(authLimiter), (req, res) => AuthController.invite(req, res));
 
 // Accept invite / set password
 router.post('/set-password', (req, res) => AuthController.setPassword(req, res));
@@ -21,7 +21,8 @@ router.post('/set-password', (req, res) => AuthController.setPassword(req, res))
 router.get('/set-password', (req, res) => {
 	const token = req.query.token;
 	if (!token) return res.status(400).json({ message: 'Token required' });
-	const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+	const env = require('../config/env');
+	const baseUrl = env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
 	return res.redirect(302, `${baseUrl}/set-password?token=${encodeURIComponent(token)}`);
 });
 
@@ -31,14 +32,15 @@ router.post('/reset-password', (req, res) => AuthController.resetPassword(req, r
 router.get('/reset-password', (req, res) => {
 	const token = req.query.token;
 	if (!token) return res.status(400).json({ message: 'Token required' });
-	const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+	const env = require('../config/env');
+	const baseUrl = env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
 	return res.redirect(302, `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`);
 });
 
 // Invites management
-router.get('/invites', authenticate, requireRole('SUPER'), (req, res) => InvitesController.listInvites(req, res));
-router.post('/invites/:id/resend', authenticate, requireRole('SUPER'), rateLimit(authLimiter), (req, res) => InvitesController.resendInvite(req, res));
-router.delete('/invites/:id', authenticate, requireRole('SUPER'), rateLimit(authLimiter), (req, res) => InvitesController.revokeInvite(req, res));
-router.post('/invites/:id/revoke', authenticate, requireRole('SUPER'), rateLimit(authLimiter), (req, res) => InvitesController.revokeInvite(req, res));
+router.get('/invites', authenticate, requireRole('SUPER_ADMIN'), (req, res) => InvitesController.listInvites(req, res));
+router.post('/invites/:id/resend', authenticate, requireRole('SUPER_ADMIN'), rateLimit(authLimiter), (req, res) => InvitesController.resendInvite(req, res));
+router.delete('/invites/:id', authenticate, requireRole('SUPER_ADMIN'), rateLimit(authLimiter), (req, res) => InvitesController.revokeInvite(req, res));
+router.post('/invites/:id/revoke', authenticate, requireRole('SUPER_ADMIN'), rateLimit(authLimiter), (req, res) => InvitesController.revokeInvite(req, res));
 
 module.exports = router;

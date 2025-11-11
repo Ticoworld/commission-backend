@@ -7,7 +7,7 @@ const { logActivity } = require('../utils/activity');
 const listSchema = z.object({
   q: z.string().optional(),
   // Accept empty string from query (treat as undefined)
-  role: z.preprocess((val) => (val === '' ? undefined : val), z.enum(['SUPER','ADMIN','MEDIA','AUDIT','LGA']).optional()),
+  role: z.preprocess((val) => (val === '' ? undefined : val), z.enum(['SUPER_ADMIN','ADMIN','MEDIA_ADMIN','AUDIT','LGA']).optional()),
   status: z.enum(['active','invited','disabled','all']).optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
@@ -35,7 +35,7 @@ async function listUsers(req, res) {
   return res.json({ data: items, meta: { total, page, pageSize } });
 }
 
-const roleSchema = z.object({ role: z.enum(['SUPER','ADMIN','MEDIA','AUDIT']) });
+const roleSchema = z.object({ role: z.enum(['SUPER_ADMIN','ADMIN','MEDIA_ADMIN','AUDIT']) });
 const idParams = z.object({ id: z.string() });
 
 async function updateUserRole(req, res) {
@@ -53,7 +53,8 @@ async function forceResetPassword(req, res) {
   const token = crypto.randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
   await prisma.user.update({ where: { id: user.id }, data: { resetToken: token, resetTokenExpires: expiresAt } });
-  const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const env = require('../config/env');
+  const baseUrl = env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
   // Use SPA route for reset password
   const link = `${baseUrl}/reset-password?token=${token}`;
   await sendMail({ to: user.email, subject: 'Password reset', text: `Reset your password: ${link}` });

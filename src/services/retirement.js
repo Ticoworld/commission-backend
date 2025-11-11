@@ -2,25 +2,67 @@ const prisma = require('../db/prisma');
 const { daysUntil, formatDate, priorityForRetirement } = require('../utils/dates');
 
 async function computeRetirementAlerts({ priority, department } = {}) {
-  const maxDate = new Date();
-  maxDate.setDate(maxDate.getDate() + 365);
+  // Alert window: next 12 months
+  const now = new Date();
+  const alertWindow = new Date();
+  alertWindow.setFullYear(alertWindow.getFullYear() + 1);
+
+  // Cutoff dates for hitting 60 years of age or 35 years of service within window
+  const ageCutoffDate = new Date(alertWindow);
+  ageCutoffDate.setFullYear(alertWindow.getFullYear() - 60);
+
+  const serviceCutoffDate = new Date(alertWindow);
+  serviceCutoffDate.setFullYear(alertWindow.getFullYear() - 35);
+
   const where = {
-    retirementDate: { lte: maxDate },
-    ...(department ? { department } : {}),
+    AND: [
+      department ? { department } : {},
+      {
+        OR: [
+          // Will turn 60 by the end of alert window
+          { date_of_birth: { lte: ageCutoffDate } },
+          // Will reach 35 years of service by the end of alert window
+          { date_of_first_appointment: { lte: serviceCutoffDate } },
+        ],
+      },
+    ],
   };
+
   const employees = await prisma.employee.findMany({ where });
-  const alerts = employees.map((e) => {
-    const days = daysUntil(e.retirementDate);
-    const pr = priorityForRetirement(e.retirementDate);
-    return {
-      employeeId: e.id,
-      name: e.name,
-      department: e.department,
-      retirementDate: formatDate(e.retirementDate),
-      daysUntil: days,
-      priority: pr,
-    };
-  }).filter((a) => (priority ? a.priority === priority : true));
+
+  function addYears(date, years) {
+    if (!date) return null;
+    const d = new Date(date);
+    d.setFullYear(d.getFullYear() + years);
+    return d;
+  }
+
+  const alerts = employees
+    .map((e) => {
+      const ageRetirementDate = addYears(e.date_of_birth, 60);
+      const serviceRetirementDate = addYears(e.date_of_first_appointment, 35);
+      const dates = [ageRetirementDate, serviceRetirementDate].filter(Boolean);
+      if (dates.length === 0) return null;
+      const retirementDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+      return { e, retirementDate };
+    })
+    .filter(Boolean)
+    // Ensure the retirement date is within the alert window and not in the past
+    .filter(({ retirementDate }) => retirementDate >= now && retirementDate <= alertWindow)
+    .map(({ e, retirementDate }) => {
+      const days = daysUntil(retirementDate);
+      const pr = priorityForRetirement(retirementDate);
+      return {
+        employeeId: e.id,
+        name: e.name,
+        department: e.department,
+        retirementDate: formatDate(retirementDate),
+        daysUntil: days,
+        priority: pr,
+      };
+    })
+    .filter((a) => (priority ? a.priority === priority : true));
+
   return alerts.sort((a, b) => a.daysUntil - b.daysUntil);
 }
 

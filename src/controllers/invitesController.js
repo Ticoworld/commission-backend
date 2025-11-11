@@ -62,7 +62,8 @@ async function resendInvite(req, res) {
     select: { id: true, email: true, inviteToken: true, inviteTokenExpires: true, status: true },
   });
 
-  const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const env = require('../config/env');
+    const baseUrl = env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
   // Use SPA route for set password
   const link = `${baseUrl}/set-password?token=${token}`;
   await sendMail({ to: updated.email, subject: 'Your ESLGSC Invite', text: `Set your password: ${link}` });
