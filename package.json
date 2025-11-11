@@ -8,7 +8,9 @@
     "start": "node index.js",
     "migrate": "prisma migrate deploy",
     "generate": "prisma generate",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "users:list": "node scripts/list-users.js",
+    "users:cleanup": "node scripts/cleanup-test-users.js"
   },
   "keywords": [],
   "author": "",

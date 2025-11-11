@@ -56,6 +56,7 @@ async function main() {
   app.use('/api/employee-edits', employeeEditsRoutes);
   app.use('/api/audit-queue', auditQueueRoutes);
   app.use('/api/news', newsRoutes);
+  app.use('/api/uploads', uploadsRoutes);
   app.use('/api/lgas', lgasRoutes);
   app.use('/api/roles', rolesRoutes);
   app.use('/api/users', usersRoutes);
@@ -72,7 +73,7 @@ async function main() {
     try {
       const alerts = await computeRetirementAlerts();
       const csv = await exportAlerts('csv');
-      const supers = await prisma.user.findMany({ where: { role: { in: ['SUPER', 'AUDIT'] } } });
+  const supers = await prisma.user.findMany({ where: { role: { in: ['SUPER_ADMIN', 'AUDIT'] } } });
       const to = supers.map((u) => u.email).filter(Boolean);
       if (to.length) {
         await sendMail({

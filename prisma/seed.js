@@ -29,12 +29,12 @@ async function main() {
   }
   console.log('Default roles seeded.');
 
-  const name = process.env.SEED_SUPER_NAME || 'Super Admin';
-  const email = process.env.SEED_SUPER_EMAIL || 'super@eslgsc.gov.ng';
-  const password = process.env.SEED_SUPER_PASSWORD || 'ChangeMe123!';
+  const name = process.env.SEED_SUPER_NAME;
+  const email = process.env.SEED_SUPER_EMAIL;
+  const password = process.env.SEED_SUPER_PASSWORD;
 
-  if (!email || !password) {
-    console.error('[seed] Missing SEED_SUPER_EMAIL or SEED_SUPER_PASSWORD');
+  if (!name || !email || !password) {
+    console.error('[seed] Missing SEED_SUPER_NAME, SEED_SUPER_EMAIL or SEED_SUPER_PASSWORD');
     process.exit(1);
   }
 
