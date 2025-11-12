@@ -4,6 +4,12 @@ const prisma = require('../src/db/prisma');
 require('dotenv').config();
 
 async function main() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const allowProdSeed = process.env.ALLOW_PROD_SEED === 'true';
+  if (isProd && !allowProdSeed) {
+    console.error('[seed] Refusing to run in production without ALLOW_PROD_SEED=true');
+    process.exit(1);
+  }
   // --- Delete old, incorrect roles ---
   console.log('Deleting old roles...');
   try {
@@ -29,6 +35,40 @@ async function main() {
   }
   console.log('Default roles seeded.');
 
+  // --- Create default LGAs ---
+  console.log('Seeding default LGAs...');
+
+  const lgaList = [
+    'Abakaliki',
+    'Ebonyi',
+    'Ohaukwu',
+    'Ezza North',
+    'Ezza South',
+    'Ikwo',
+    'Ivo',
+    'Izzi',
+    'Afikpo North',
+    'Afikpo South',
+    'Onicha',
+    'Ohaozara',
+    'Ishielu',
+  ];
+
+  for (const name of lgaList) {
+    // generate a simple unique code from the name (uppercase, underscore-separated)
+    const code = name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+
+    await prisma.lGA.upsert({
+      where: { code },
+      update: { name },
+      create: { name, code },
+    });
+  }
+  console.log('Default LGAs seeded.');
+
   const name = process.env.SEED_SUPER_NAME;
   const email = process.env.SEED_SUPER_EMAIL;
   const password = process.env.SEED_SUPER_PASSWORD;
@@ -40,13 +80,15 @@ async function main() {
 
   // Standardized roles: use SUPER_ADMIN as the top-level role
   const existingUser = await prisma.user.findUnique({ where: { email } });
+  const resetPassword = process.env.SEED_RESET_SUPER_PASSWORD === 'true';
   const passwordHash = await bcrypt.hash(password, 10);
   if (existingUser) {
-    const updated = await prisma.user.update({
-      where: { id: existingUser.id },
-      data: { name, role: 'SUPER_ADMIN', passwordHash },
-    });
-    console.log(`[seed] SUPER admin updated: ${updated.email}`);
+    const data = { name, role: 'SUPER_ADMIN' };
+    if (resetPassword) {
+      data.passwordHash = passwordHash;
+    }
+    const updated = await prisma.user.update({ where: { id: existingUser.id }, data });
+    console.log(`[seed] SUPER admin updated: ${updated.email}${resetPassword ? ' (password reset)' : ''}`);
   } else {
     const created = await prisma.user.create({
       data: { name, email, passwordHash, role: 'SUPER_ADMIN' },

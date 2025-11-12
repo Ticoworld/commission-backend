@@ -34,15 +34,29 @@ async function main() {
 
   // Global middleware
   app.use(helmet());
-  app.use(cors());
+  // CORS: allow all in development; restrict by ALLOWED_ORIGINS in production
+  if (env.NODE_ENV !== 'production') {
+    app.use(cors());
+  } else {
+    const allowed = new Set(env.ALLOWED_ORIGINS || []);
+    app.use(cors({
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true); // non-browser or same-origin
+        if (allowed.size === 0 || allowed.has(origin)) return cb(null, true);
+        return cb(new Error('Not allowed by CORS'));
+      },
+      credentials: true,
+    }));
+  }
   app.use(morgan('dev'));
   app.use(express.json());
   app.use(rateLimit(commonLimiter));
 
-  // Static uploads (existing upload directory)
-  app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR)));
-  // Static public directory for profile pictures
-  app.use('/uploads/profiles', express.static(path.resolve('./public/uploads/profiles')));
+  // Static uploads: serve publicly only in development; in production, use authenticated download route
+  if (env.NODE_ENV !== 'production') {
+    app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR)));
+    app.use('/uploads/profiles', express.static(path.resolve('./public/uploads/profiles')));
+  }
 
   // Health
   app.get('/api/health', (req, res) => {

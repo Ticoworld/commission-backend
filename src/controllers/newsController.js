@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const prisma = require('../db/prisma');
 const { logActivity } = require('../utils/activity');
+const slugify = require('slugify');
 
 const newsSchema = z.object({
   title: z.string().min(1),
@@ -23,7 +24,12 @@ async function list(req, res) {
   const { status, authorId } = req.query;
   const where = { ...(status ? { status } : {}), ...(authorId ? { authorId } : {}) };
   const items = await prisma.news.findMany({ where, orderBy: { createdAt: 'desc' }, include: { author: { select: { name: true } } } });
-  const shaped = items.map(({ author, ...rest }) => ({ ...rest, authorName: author?.name || null }));
+  const shaped = items.map(({ author, ...rest }) => ({
+    ...rest,
+    authorName: author?.name || null,
+    // Expose a submittedAt hint without schema change: when status becomes pending, updatedAt is the submit time
+    submittedAt: rest.status === 'pending' ? rest.updatedAt : null,
+  }));
   res.json(shaped);
 }
 
@@ -31,18 +37,71 @@ async function get(req, res) {
   const item = await prisma.news.findUnique({ where: { id: req.params.id }, include: { author: { select: { name: true } } } });
   if (!item) return res.status(404).json({ message: 'News not found' });
   const { author, ...rest } = item;
-  res.json({ ...rest, authorName: author?.name || null });
+  res.json({
+    ...rest,
+    authorName: author?.name || null,
+    submittedAt: rest.status === 'pending' ? rest.updatedAt : null,
+  });
+}
+
+// Public: fetch a published post by slug
+async function getNewsBySlug(req, res) {
+  const { slug } = req.params;
+  try {
+    const post = await prisma.news.findUnique({
+      where: { slug },
+      include: { author: { select: { name: true } } },
+    });
+    if (!post || post.status !== 'published') {
+      return res.status(404).json({ message: 'News post not found or not published' });
+    }
+    const { author, ...rest } = post;
+    return res.status(200).json({ ...rest, authorName: author?.name || null });
+  } catch (error) {
+    console.error('Error fetching news by slug:', error);
+    return res.status(500).json({ message: 'Error fetching news post' });
+  }
 }
 
 async function create(req, res) {
   const parsed = newsSchema.parse(req.body);
-  const item = await prisma.news.create({ data: { ...parsed, tags: normalizeTags(parsed.tags), status: 'draft', authorId: req.user.id } });
+  let slug = slugify(parsed.title, { lower: true, strict: true });
+  if (slug) {
+    const existing = await prisma.news.findUnique({ where: { slug } }).catch(() => null);
+    if (existing) {
+      slug = `${slug}-${Date.now().toString().slice(-5)}`;
+    }
+  }
+  const item = await prisma.news.create({
+    data: {
+      ...parsed,
+      tags: normalizeTags(parsed.tags),
+      status: 'draft',
+      authorId: req.user.id,
+      slug,
+    },
+  });
   res.status(201).json(item);
 }
 
 async function update(req, res) {
+  const id = req.params.id;
   const data = newsSchema.partial().parse(req.body);
-  const item = await prisma.news.update({ where: { id: req.params.id }, data: { ...data, ...(data.tags !== undefined ? { tags: normalizeTags(data.tags) } : {}) } });
+  const payload = {
+    ...data,
+    ...(data.tags !== undefined ? { tags: normalizeTags(data.tags) } : {}),
+  };
+  if (data.title) {
+    let newSlug = slugify(data.title, { lower: true, strict: true });
+    if (newSlug) {
+      const existing = await prisma.news.findFirst({ where: { slug: newSlug, NOT: { id } } }).catch(() => null);
+      if (existing) {
+        newSlug = `${newSlug}-${Date.now().toString().slice(-5)}`;
+      }
+      payload.slug = newSlug;
+    }
+  }
+  const item = await prisma.news.update({ where: { id }, data: payload });
   res.json(item);
 }
 
@@ -74,4 +133,61 @@ async function reject(req, res) {
   res.json({ message: 'Rejected' });
 }
 
-module.exports = { list, get, create, update, submit, approve, reject };
+async function deletePost(req, res) {
+  const { id } = req.params;
+  try {
+    const post = await prisma.news.findUnique({ where: { id } });
+    const title = post ? post.title : `ID ${id}`;
+
+    if (!post) {
+      return res.status(404).json({ message: 'News post not found' });
+    }
+
+    await prisma.news.delete({ where: { id } });
+
+    await logActivity({ actorId: req.user.id, actorName: req.user.name, action: 'delete', entityType: 'news', entityId: id, entityName: title });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting news post:', error);
+    res.status(500).json({ message: 'Error deleting news post' });
+  }
+}
+
+// Admin-only: backfill slugs via API (use with care). Optional ?dry=true
+async function backfillSlugs(req, res) {
+  const dry = String(req.query.dry || '').toLowerCase() === 'true';
+  try {
+    const whereMissing = { OR: [{ slug: null }, { slug: '' }] };
+    const allExisting = await prisma.news.findMany({ select: { slug: true } });
+    const toBackfill = await prisma.news.findMany({ where: whereMissing, select: { id: true, title: true, slug: true }, orderBy: { createdAt: 'asc' } });
+
+    const used = new Set((allExisting.map((x) => x.slug).filter(Boolean)).map((s) => s.toLowerCase()));
+    const plans = toBackfill.map((it) => {
+      const base = slugify(it.title || '', { lower: true, strict: true }) || `post-${it.id.slice(-6)}`;
+      let candidate = base;
+      let attempt = 0;
+      while (used.has(candidate.toLowerCase())) {
+        attempt += 1;
+        const suffix = String(Date.now()).slice(-5) + (attempt > 1 ? `-${attempt}` : '');
+        candidate = `${base}-${suffix}`;
+      }
+      used.add(candidate.toLowerCase());
+      return { id: it.id, from: it.slug, to: candidate, title: it.title };
+    });
+
+    if (dry) {
+      return res.json({ dryRun: true, updates: plans, count: plans.length });
+    }
+
+    for (const p of plans) {
+      await prisma.news.update({ where: { id: p.id }, data: { slug: p.to } });
+    }
+    return res.json({ dryRun: false, updated: plans.length });
+  } catch (e) {
+    console.error('Error backfilling slugs via API:', e);
+    return res.status(500).json({ message: 'Error backfilling slugs' });
+  }
+}
+
+module.exports = { list, get, getNewsBySlug, create, update, submit, approve, reject, deletePost, backfillSlugs };

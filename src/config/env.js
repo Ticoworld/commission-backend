@@ -21,6 +21,11 @@ const env = {
   BREVO_API_KEY: process.env.BREVO_API_KEY,
   // Frontend base URL for links in emails (invite/reset). Defaults to Vite dev server in development.
   APP_BASE_URL: process.env.APP_BASE_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : undefined),
+  // Comma-separated list of allowed origins for production CORS
+  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
 };
 
 module.exports = env;
