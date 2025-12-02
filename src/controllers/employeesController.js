@@ -167,63 +167,89 @@ async function create(req, res) {
 }
 
 async function update(req, res) {
-  const id = req.params.id;
-  if (req.user.role === 'LGA') {
-    const body = lgaUpdateSchema.parse(req.body);
-    // Ensure ownership by LGA
+  const { id } = req.params;
+  const { role } = req.user;
+  const userLgaId = req.user.lgaId;
+
+  try {
+    // 1. Check existence and permissions
     const existing = await prisma.employee.findUnique({ where: { id } });
-    if (!existing || existing.lgaId !== req.user.lgaId) return res.status(403).json({ message: 'Forbidden' });
+    if (!existing) return res.status(404).json({ message: 'Employee not found' });
+
+    if (role === 'LGA' && existing.lgaId !== userLgaId) {
+      return res.status(403).json({ message: 'Unauthorized to update this employee' });
+    }
+
+    // 2. Handle File Upload
+    let profile_picture_url = undefined;
+    if (req.file) {
+      // Assuming local upload middleware is used. 
+      // If using Cloudinary/S3, adjust to use req.file.path or location
+      profile_picture_url = `/uploads/profiles/${req.file.filename}`;
+    }
+
+    // 3. Prepare Payload (Convert Strings to Dates)
+    const body = { ...req.body };
+
+    // Helper: Convert empty strings or "null" to null, otherwise return value
+    const cleanString = (s) => (s === 'null' || s === '' || s === 'undefined' ? null : s);
     
-    // Whitelist fields for LGA and convert dates
-    const allowed = {};
-    if (body.full_name !== undefined) allowed.full_name = body.full_name;
-    if (body.sex !== undefined) allowed.sex = body.sex;
-    if (body.rank !== undefined) allowed.rank = body.rank;
-    if (body.grade_level !== undefined) allowed.grade_level = body.grade_level;
-    if (body.date_of_birth !== undefined) allowed.date_of_birth = new Date(body.date_of_birth);
-    if (body.date_of_first_appointment !== undefined) allowed.date_of_first_appointment = new Date(body.date_of_first_appointment);
-    if (body.lga_of_origin !== undefined) allowed.lga_of_origin = body.lga_of_origin;
-    if (body.department !== undefined) allowed.department = body.department;
-    if (body.present_station !== undefined) allowed.present_station = body.present_station;
-    if (body.phone_number !== undefined) allowed.phone_number = body.phone_number;
-    if (body.qualifications !== undefined) allowed.qualifications = body.qualifications;
-    if (body.date_of_confirmation !== undefined) allowed.date_of_confirmation = body.date_of_confirmation ? new Date(body.date_of_confirmation) : null;
-    if (body.date_of_transfer !== undefined) allowed.date_of_transfer = body.date_of_transfer ? new Date(body.date_of_transfer) : null;
-    if (body.remark !== undefined) allowed.remark = body.remark;
-    if (body.fingerprint_template !== undefined) allowed.fingerprint_template = body.fingerprint_template;
-    
-    const emp = await prisma.employee.update({ where: { id }, data: allowed });
+    // Helper: Convert string dates to Date objects
+    const parseDate = (d) => {
+      if (!d || d === 'null' || d === '') return undefined;
+      return new Date(d);
+    };
+
+    const payload = {
+      full_name: body.full_name,
+      sex: body.sex,
+      rank: body.rank,
+      grade_level: body.grade_level,
+      lga_of_origin: body.lga_of_origin,
+      department: body.department,
+      present_station: body.present_station,
+      
+      // Clean optional strings
+      phone_number: cleanString(body.phone_number),
+      qualifications: cleanString(body.qualifications),
+      remark: cleanString(body.remark),
+      fingerprint_template: cleanString(body.fingerprint_template),
+      
+      // Parse Dates (CRITICAL FIX)
+      date_of_birth: parseDate(body.date_of_birth),
+      date_of_first_appointment: parseDate(body.date_of_first_appointment),
+      date_of_confirmation: parseDate(body.date_of_confirmation) || null,
+      date_of_transfer: parseDate(body.date_of_transfer) || null,
+    };
+
+    // Only update profile picture if a new one was uploaded
+    if (profile_picture_url) {
+      payload.profile_picture_url = profile_picture_url;
+    }
+
+    // 4. Execute Update
+    const updated = await prisma.employee.update({
+      where: { id },
+      data: payload,
+    });
+
     await logActivity({ 
       actorId: req.user.id, 
       actorName: req.user.name, 
       action: 'update', 
       entityType: 'employee', 
-      entityId: emp.id, 
-      entityName: emp.full_name 
+      entityId: updated.id, 
+      entityName: updated.full_name 
     });
-    return res.json(emp);
-  }
+    res.json(updated);
 
-  // Admin role
-  const body = adminUpdateSchema.parse(req.body);
-  
-  // Convert date strings to Date objects if provided
-  const updateData = { ...body };
-  if (body.date_of_birth) updateData.date_of_birth = new Date(body.date_of_birth);
-  if (body.date_of_first_appointment) updateData.date_of_first_appointment = new Date(body.date_of_first_appointment);
-  if (body.date_of_confirmation) updateData.date_of_confirmation = new Date(body.date_of_confirmation);
-  if (body.date_of_transfer) updateData.date_of_transfer = new Date(body.date_of_transfer);
-  
-  const emp = await prisma.employee.update({ where: { id }, data: updateData });
-  await logActivity({ 
-    actorId: req.user.id, 
-    actorName: req.user.name, 
-    action: 'update', 
-    entityType: 'employee', 
-    entityId: emp.id, 
-    entityName: emp.full_name 
-  });
-  return res.json(emp);
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    if (error.code === 'P2002') {
+      return res.status(400).json({ message: 'Unique constraint violation' });
+    }
+    res.status(500).json({ message: 'Error updating employee' });
+  }
 }
 
 async function remove(req, res) {
