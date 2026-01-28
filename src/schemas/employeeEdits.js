@@ -18,7 +18,9 @@ const { z } = require('zod');
 const employeeEditsSchema = z.object({
   employeeId: z.string().uuid('Invalid employee ID format'),
   changes: z
-    .record(z.any())
+    // Zod v4 requires both key schema and value schema for records.
+    // Using only one argument causes runtime parse errors.
+    .record(z.string(), z.any())
     .refine(
       (obj) => obj && Object.keys(obj).length > 0,
       {

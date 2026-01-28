@@ -12,7 +12,9 @@ function validate(schema, source = 'body') {
         console.error('validate middleware: error checking schema:', logErr);
       }
 
-      const parsed = schema.parse(data);
+      // Zod v4's parse relies on `this` being the schema instance.
+      // Using `.call(schema, ...)` guards against any accidental unbound method usage.
+      const parsed = schema.parse.call(schema, data);
       req[source] = parsed;
       next();
     } catch (err) {

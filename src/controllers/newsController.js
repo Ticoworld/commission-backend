@@ -34,6 +34,34 @@ async function list(req, res) {
   res.json(shaped);
 }
 
+// Public: list published posts (supports ?limit=, ?page=)
+async function listPublished(req, res) {
+  const limit = Math.min(Math.max(parseInt(req.query.limit || '30', 10) || 30, 1), 100);
+  const page = Math.max(parseInt(req.query.page || '1', 10) || 1, 1);
+  const skip = (page - 1) * limit;
+
+  try {
+    const items = await prisma.news.findMany({
+      where: { status: 'published' },
+      orderBy: { publishedAt: 'desc' },
+      take: limit,
+      skip,
+      include: { author: { select: { name: true } } },
+    });
+
+    const shaped = items.map(({ author, ...rest }) => ({
+      ...rest,
+      authorName: author?.name || null,
+      submittedAt: null,
+    }));
+
+    return res.json(shaped);
+  } catch (error) {
+    console.error('Error listing published news:', error);
+    return res.status(500).json({ message: 'Error fetching published news' });
+  }
+}
+
 async function get(req, res) {
   const item = await prisma.news.findUnique({ where: { id: req.params.id }, include: { author: { select: { name: true } } } });
   if (!item) return res.status(404).json({ message: 'News not found' });
@@ -236,4 +264,4 @@ async function backfillSlugs(req, res) {
   }
 }
 
-module.exports = { list, get, getNewsBySlug, getPublishedById, create, update, submit, approve, reject, deletePost, backfillSlugs };
+module.exports = { list, listPublished, get, getNewsBySlug, getPublishedById, create, update, submit, approve, reject, deletePost, backfillSlugs };
