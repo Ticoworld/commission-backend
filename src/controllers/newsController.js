@@ -64,6 +64,32 @@ async function getNewsBySlug(req, res) {
   }
 }
 
+// Public: fetch a published post by ID (fallback when slug doesn't exist)
+async function getPublishedById(req, res) {
+  const { id } = req.params;
+  
+  // Validate UUID format before querying
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(id)) {
+    return res.status(404).json({ message: 'News post not found' });
+  }
+  
+  try {
+    const post = await prisma.news.findUnique({
+      where: { id },
+      include: { author: { select: { name: true } } },
+    });
+    if (!post || post.status !== 'published') {
+      return res.status(404).json({ message: 'News post not found or not published' });
+    }
+    const { author, ...rest } = post;
+    return res.status(200).json({ ...rest, authorName: author?.name || null });
+  } catch (error) {
+    console.error('Error fetching news by ID:', error);
+    return res.status(500).json({ message: 'Error fetching news post' });
+  }
+}
+
 async function create(req, res) {
   const parsed = newsSchema.parse(req.body);
   
@@ -210,4 +236,4 @@ async function backfillSlugs(req, res) {
   }
 }
 
-module.exports = { list, get, getNewsBySlug, create, update, submit, approve, reject, deletePost, backfillSlugs };
+module.exports = { list, get, getNewsBySlug, getPublishedById, create, update, submit, approve, reject, deletePost, backfillSlugs };

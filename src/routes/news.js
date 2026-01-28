@@ -4,8 +4,9 @@ const News = require('../controllers/newsController');
 
 const router = express.Router();
 
-// PUBLIC ROUTE: Get a single post by its slug
+// PUBLIC ROUTES: Get published articles
 router.get('/slug/:slug', (req, res) => News.getNewsBySlug(req, res));
+router.get('/published/:id', (req, res) => News.getPublishedById(req, res));
 
 router.use(authenticate);
 
