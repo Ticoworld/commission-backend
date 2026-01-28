@@ -30,75 +30,59 @@ async function list(req, res) {
 
 async function create(req, res) {
   try {
-    const body = req.body;
-    console.log('[employee-edits] Received body:', JSON.stringify(body, null, 2));
+    const { employeeId, changes, reason } = req.body;
+    
+    console.log('[employee-edits] Received body:', JSON.stringify(req.body, null, 2));
 
-    let editsToCreate = [];
-    let employeeId, reason;
-
-    // Check if it's a Batch Edit (has 'changes' object)
-    if (body.changes && typeof body.changes === 'object') {
-      console.log('[employee-edits] Processing BATCH edit');
-      employeeId = body.employeeId;
-      reason = body.reason;
-
-      if (!employeeId || !reason) {
-        return res.status(400).json({ message: 'Missing employeeId or reason' });
-      }
-
-      // Get current employee data for oldValue
-      const currentEmployee = await prisma.employee.findUnique({ where: { id: employeeId } });
-      if (!currentEmployee) return res.status(404).json({ message: 'Employee not found' });
-
-      editsToCreate = Object.entries(body.changes).map(([field, newValue]) => ({
-        employeeId,
-        submittedById: req.user.id,
-        field,
-        oldValue: String(currentEmployee[field] || ''),
-        newValue: String(newValue),
-        reason,
-        status: 'pending'
-      }));
-
-    } else {
-      console.log('[employee-edits] Processing SINGLE edit');
-      // Single Edit fallback
-      const { field, oldValue, newValue } = body;
-      employeeId = body.employeeId;
-      reason = body.reason;
-
-      if (!employeeId || !field || !newValue || !reason) {
-        return res.status(400).json({ message: 'Missing required fields for single edit' });
-      }
-
-      editsToCreate.push({
-        employeeId,
-        submittedById: req.user.id,
-        field,
-        oldValue: String(oldValue || ''),
-        newValue: String(newValue),
-        reason,
-        status: 'pending'
-      });
+    // Validate required fields
+    if (!employeeId) {
+      return res.status(400).json({ message: 'Missing employeeId' });
+    }
+    if (!changes || typeof changes !== 'object' || Object.keys(changes).length === 0) {
+      return res.status(400).json({ message: 'Missing changes object or changes is empty' });
+    }
+    if (!reason) {
+      return res.status(400).json({ message: 'Missing reason' });
     }
 
-    if (editsToCreate.length === 0) {
-      return res.status(400).json({ message: 'No changes detected' });
+    // Verify employee exists
+    const employee = await prisma.employee.findUnique({ 
+      where: { id: employeeId } 
+    });
+    
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
     }
 
-    console.log(`[employee-edits] Saving ${editsToCreate.length} edits...`);
+    console.log(`[employee-edits] Creating edit suggestion with ${Object.keys(changes).length} field changes`);
 
-    // Save all edits to database
-    await prisma.$transaction(
-      editsToCreate.map(data => prisma.employeeEdit.create({ data }))
+    // Create a single EmployeeEdit record with changes stored as JSON
+    const employeeEdit = await prisma.employeeEdit.create({
+      data: {
+        employeeId,
+        submittedById: req.user.id,
+        changes, // Store as JSON in the database
+        reason,
+        status: 'pending'
+      }
+    });
+
+    await logActivity(
+      req.user.id, 
+      `Submitted edit suggestion for employee ${employee.full_name || employeeId}`
     );
 
-    await logActivity(req.user.id, `Submitted ${editsToCreate.length} edits for employee`);
-    res.status(201).json({ message: 'Edits submitted successfully' });
+    res.status(201).json({ 
+      message: 'Edit suggestion submitted successfully',
+      data: employeeEdit
+    });
 
   } catch (error) {
-    console.error('Error creating edit:', error);
-    res.status(500).json({ message: 'Error submitting edit' });
+    console.error('Error creating employee edit:', error);
+    res.status(500).json({ 
+      message: 'Error submitting edit suggestion',
+      error: error.message 
+    });
   }
 }
 

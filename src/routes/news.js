@@ -13,10 +13,11 @@ router.get('/', requireRole('MEDIA_ADMIN', 'SUPER_ADMIN', 'ADMIN'), (req, res) =
 
 router.get('/:id', requireRole('MEDIA_ADMIN', 'SUPER_ADMIN', 'ADMIN'), (req, res) => News.get(req, res));
 
-// Creation and update restricted to MEDIA_ADMIN per updated RBAC
-router.post('/', requireRole('MEDIA_ADMIN'), (req, res) => News.create(req, res));
-router.put('/:id', requireRole('MEDIA_ADMIN'), (req, res) => News.update(req, res));
-router.post('/:id/submit', requireRole('MEDIA_ADMIN'), (req, res) => News.submit(req, res));
+// Creation and update - MEDIA_ADMIN creates, but SUPER_ADMIN and ADMIN can also manage
+router.post('/', requireRole('MEDIA_ADMIN', 'SUPER_ADMIN', 'ADMIN'), (req, res) => News.create(req, res));
+router.put('/:id', requireRole('MEDIA_ADMIN', 'SUPER_ADMIN', 'ADMIN'), (req, res) => News.update(req, res));
+// Submit for approval - All admin roles can submit
+router.post('/:id/submit', requireRole('MEDIA_ADMIN', 'SUPER_ADMIN', 'ADMIN'), (req, res) => News.submit(req, res));
 router.post('/:id/approve', requireRole('SUPER_ADMIN', 'ADMIN'), (req, res) => News.approve(req, res));
 router.post('/:id/reject', requireRole('SUPER_ADMIN', 'ADMIN'), (req, res) => News.reject(req, res));
 

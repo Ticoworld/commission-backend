@@ -25,7 +25,6 @@ const lgasRoutes = require('./src/routes/lgas');
 const retirementRoutes = require('./src/routes/retirement');
 const activityRoutes = require('./src/routes/activity');
 const dashboardRoutes = require('./src/routes/dashboard');
-const rolesRoutes = require('./src/routes/roles');
 const usersRoutes = require('./src/routes/users');
 
 async function main() {
@@ -72,7 +71,6 @@ async function main() {
   app.use('/api/news', newsRoutes);
   app.use('/api/uploads', uploadsRoutes);
   app.use('/api/lgas', lgasRoutes);
-  app.use('/api/roles', rolesRoutes);
   app.use('/api/users', usersRoutes);
   app.use('/api', retirementRoutes); // contains /retirement-alerts endpoints
   app.use('/api', activityRoutes);   // contains /activity-log

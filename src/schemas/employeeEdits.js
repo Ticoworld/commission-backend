@@ -1,23 +1,31 @@
 const { z } = require('zod');
 
-const batchSchema = z.object({
-  employeeId: z.string().uuid(),
-  // z.record doesn't support `.min()`; require at least one key with a refine
-  changes: z.record(z.any()).refine(obj => obj && Object.keys(obj).length > 0, {
-    message: 'changes must contain at least one field'
-  }),
-  reason: z.string().min(1)
+/**
+ * Validation schema for employee edit suggestions
+ * 
+ * Expected format:
+ * {
+ *   employeeId: "uuid",
+ *   changes: { 
+ *     field_name: "new_value",
+ *     another_field: "another_value"
+ *   },
+ *   reason: "Description of why this change is needed"
+ * }
+ * 
+ * The 'changes' object is stored directly in the database as JSON.
+ */
+const employeeEditsSchema = z.object({
+  employeeId: z.string().uuid('Invalid employee ID format'),
+  changes: z
+    .record(z.any())
+    .refine(
+      (obj) => obj && Object.keys(obj).length > 0,
+      {
+        message: 'changes must contain at least one field to update'
+      }
+    ),
+  reason: z.string().min(1, 'Reason is required and cannot be empty')
 });
-
-const singleSchema = z.object({
-  employeeId: z.string().uuid(),
-  field: z.string(),
-  oldValue: z.any().optional(),
-  newValue: z.any(),
-  reason: z.string().min(1)
-});
-
-// Accept either a batch edit (changes object) or a single field edit
-const employeeEditsSchema = z.union([batchSchema, singleSchema]);
 
 module.exports = { employeeEditsSchema };

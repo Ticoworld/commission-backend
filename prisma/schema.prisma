@@ -145,29 +145,3 @@ model Announcement {
   createdAt DateTime @default(now())
 }
 
-// Role/Permission models to support /api/roles endpoints
-
-model Role {
-  id        String            @id @default(uuid()) @db.Uuid
-  name      String            @unique
-  createdAt DateTime          @default(now())
-
-  rolePermissions RolePermission[]
-}
-
-model Permission {
-  id        String            @id @default(uuid()) @db.Uuid
-  name      String            @unique
-  createdAt DateTime          @default(now())
-
-  rolePermissions RolePermission[]
-}
-
-model RolePermission {
-  roleId       String     @db.Uuid
-  permissionId String     @db.Uuid
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
-
-  @@id([roleId, permissionId])
-}

@@ -71,9 +71,19 @@ async function byId(req, res) {
 }
 
 async function myLga(req, res) {
-  const lgaId = req.user.lgaId;
-  const data = await prisma.employee.findMany({ where: { lgaId } });
-  res.json(data);
+  try {
+    const lgaId = req.user.lgaId;
+    const data = await prisma.employee.findMany({ where: { lgaId } });
+    // Standardized format matching list endpoint
+    res.json({ data, meta: { total: data.length } });
+  } catch (error) {
+    console.error('Error fetching LGA employees:', error);
+    res.status(500).json({ 
+      data: [], 
+      meta: { total: 0 },
+      error: 'Failed to fetch employees' 
+    });
+  }
 }
 
 async function create(req, res) {

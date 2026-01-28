@@ -4,11 +4,12 @@ const { logActivity } = require('../utils/activity');
 const slugify = require('slugify');
 
 const newsSchema = z.object({
-  title: z.string().min(1),
+  title: z.string().min(1, 'Title is required'),
   summary: z.string().optional(),
   content: z.string().optional(),
   category: z.string().optional(),
-  imageUrl: z.string().url().optional(),
+  // Accept imageUrl as string (URL validation is lenient to allow Cloudinary URLs)
+  imageUrl: z.string().optional().or(z.literal('')),
   // Accept either comma-separated string or array of strings
   tags: z.union([z.array(z.string()), z.string()]).optional(),
 });
@@ -107,6 +108,31 @@ async function update(req, res) {
 
 async function submit(req, res) {
   const id = req.params.id;
+  const userRole = req.user.role;
+  
+  // SUPER_ADMIN and ADMIN can auto-approve their own submissions
+  if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') {
+    const item = await prisma.news.update({ 
+      where: { id }, 
+      data: { 
+        status: 'published', 
+        publishedAt: new Date(), 
+        rejectionNotes: null 
+      } 
+    });
+    await logActivity({ 
+      actorId: req.user.id, 
+      actorName: req.user.name, 
+      action: 'publish', 
+      entityType: 'news', 
+      entityId: id, 
+      entityName: item.title,
+      details: { autoApproved: true }
+    });
+    return res.json({ message: 'Article published successfully' });
+  }
+  
+  // MEDIA_ADMIN submits for approval
   const item = await prisma.news.update({ where: { id }, data: { status: 'pending', rejectionNotes: null } });
   await prisma.auditQueue.upsert({
     where: { id },
