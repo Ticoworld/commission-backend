@@ -130,10 +130,8 @@ async function me(req, res) {
   const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, name: true, email: true, role: true, status: true } });
   if (!user) return res.status(401).json({ message: 'Unauthorized' });
 
-  // Lookup permissions for the user's role from Role/Permission tables
-  const roleRow = await prisma.role.findUnique({ where: { name: user.role }, include: { rolePermissions: { include: { permission: true } } } });
-  const permissions = roleRow ? roleRow.rolePermissions.map((rp) => rp.permission.name) : [];
-  return res.json({ user, roles: [user.role], permissions });
+  // Return user with role (no longer using Role/Permission tables)
+  return res.json({ user, roles: [user.role], permissions: [] });
 }
 
 const resetPasswordSchema = z.object({ token: z.string().min(8), password: z.string().min(6) });

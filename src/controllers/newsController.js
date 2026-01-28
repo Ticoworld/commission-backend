@@ -66,22 +66,31 @@ async function getNewsBySlug(req, res) {
 
 async function create(req, res) {
   const parsed = newsSchema.parse(req.body);
-  let slug = slugify(parsed.title, { lower: true, strict: true });
-  if (slug) {
-    const existing = await prisma.news.findUnique({ where: { slug } }).catch(() => null);
-    if (existing) {
-      slug = `${slug}-${Date.now().toString().slice(-5)}`;
+  
+  // Prepare data without slug first
+  const data = {
+    ...parsed,
+    tags: normalizeTags(parsed.tags),
+    status: 'draft',
+    authorId: req.user.id,
+  };
+  
+  // Try to add slug if the column exists (for databases that have the migration)
+  try {
+    let slug = slugify(parsed.title, { lower: true, strict: true });
+    if (slug) {
+      const existing = await prisma.news.findUnique({ where: { slug } }).catch(() => null);
+      if (existing) {
+        slug = `${slug}-${Date.now().toString().slice(-5)}`;
+      }
+      data.slug = slug;
     }
+  } catch (error) {
+    // Slug column doesn't exist yet - skip it
+    console.log('[news] Slug column not available, skipping slug generation');
   }
-  const item = await prisma.news.create({
-    data: {
-      ...parsed,
-      tags: normalizeTags(parsed.tags),
-      status: 'draft',
-      authorId: req.user.id,
-      slug,
-    },
-  });
+  
+  const item = await prisma.news.create({ data });
   res.status(201).json(item);
 }
 
@@ -92,16 +101,24 @@ async function update(req, res) {
     ...data,
     ...(data.tags !== undefined ? { tags: normalizeTags(data.tags) } : {}),
   };
+  
+  // Try to update slug if column exists
   if (data.title) {
-    let newSlug = slugify(data.title, { lower: true, strict: true });
-    if (newSlug) {
-      const existing = await prisma.news.findFirst({ where: { slug: newSlug, NOT: { id } } }).catch(() => null);
-      if (existing) {
-        newSlug = `${newSlug}-${Date.now().toString().slice(-5)}`;
+    try {
+      let newSlug = slugify(data.title, { lower: true, strict: true });
+      if (newSlug) {
+        const existing = await prisma.news.findFirst({ where: { slug: newSlug, NOT: { id } } }).catch(() => null);
+        if (existing) {
+          newSlug = `${newSlug}-${Date.now().toString().slice(-5)}`;
+        }
+        payload.slug = newSlug;
       }
-      payload.slug = newSlug;
+    } catch (error) {
+      // Slug column doesn't exist yet - skip it
+      console.log('[news] Slug column not available, skipping slug update');
     }
   }
+  
   const item = await prisma.news.update({ where: { id }, data: payload });
   res.json(item);
 }
